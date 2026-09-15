@@ -9,23 +9,35 @@ def _locals():
     return {"x": x, "y": y, "Eq": sp.Eq, "Derivative": sp.Derivative, "exp": sp.exp}
 
 
+def _parse_solution(solution: str, locals_map: dict):
+    """Parser både vanlige uttrykk og løsninger skrevet som lhs = rhs."""
+    if "=" in solution and "==" not in solution:
+        left, right = solution.split("=", 1)
+        return sp.Eq(
+            sp.sympify(left.strip(), locals=locals_map),
+            sp.sympify(right.strip(), locals=locals_map),
+        )
+    return sp.sympify(solution, locals=locals_map)
+
+
 def validate(equation: str, solution: str) -> dict:
     """Validerer et uttrykk, en ligning eller en enkel ODE mot en løsning."""
     try:
         locals_map = _locals()
         expr = sp.sympify(equation, locals=locals_map)
-        proposed = sp.sympify(solution, locals=locals_map)
+        proposed = _parse_solution(solution, locals_map)
 
-        # ODE/ligning: hvis løsningen er skrevet som y(x) = ..., sett den inn
-        # i venstre og høyre side av originalen og sjekk at ligningen stemmer.
         if isinstance(expr, sp.Equality):
             if isinstance(proposed, sp.Equality):
-                substitutions = {proposed.lhs: proposed.rhs}
-                left = expr.lhs.subs(substitutions)
-                right = expr.rhs.subs(substitutions)
+                # En eksplisitt løsning, f.eks. y(x) = C1*exp(x).
+                left = expr.lhs.subs(proposed.lhs, proposed.rhs)
+                right = expr.rhs.subs(proposed.lhs, proposed.rhs)
                 valid = sp.simplify(left - right) == 0
             else:
-                valid = sp.simplify(expr.lhs - proposed) == 0 or sp.simplify(expr.rhs - proposed) == 0
+                valid = (
+                    sp.simplify(expr.lhs - proposed) == 0
+                    or sp.simplify(expr.rhs - proposed) == 0
+                )
         elif isinstance(expr, sp.Derivative):
             valid = sp.simplify(expr - proposed) == 0
         else:
