@@ -10,7 +10,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import os
 import asyncio
-from backend.llm_client import solve_task
+
+from backend import llm_client
+from backend.validator import validate
 
 
 app = FastAPI(title="MatteHjelpen")
@@ -40,40 +42,42 @@ class OppgaveResponse(BaseModel):
 
 @app.post("/solve", response_model=OppgaveResponse)
 async def solve(request: OppgaveRequest):
-    """
-    Løser en matteoppgave.
-    
-    Request: {"oppgave": "..."}
-    Response: JSON med løsning, steg, formler, validering, tokens
-    """
+    """Løser en matteoppgave og returnerer et stabilt responsformat."""
     if not request.oppgave or not request.oppgave.strip():
         raise HTTPException(status_code=400, detail="Oppgave kan ikke være tom")
-    
+
     try:
-        # Kall llm_client – kjør synkront i tråd
-        loop = asyncio.get_event_loop()
-        result = await asyncio.to_thread(solve_task, request.oppgave)
-        
-        # Sjekk for feil
-        if "error" in result:
+        result = await asyncio.to_thread(llm_client.solve_task, request.oppgave)
+
+        if not isinstance(result, dict):
+            raise HTTPException(status_code=500, detail="Ugyldig svar fra løsemotoren")
+
+        if result.get("error"):
             raise HTTPException(status_code=500, detail=result.get("svar", "Ukjent feil"))
-        
+
+        # Sørg for at API-et alltid har alle feltene frontend forventer.
+        result.setdefault("svar", "")
+        result.setdefault("steg", [])
+        result.setdefault("formler_brukt", [])
+        result.setdefault("validert", False)
+        result.setdefault("tokens_brukt", 0)
+        result.setdefault("estimert_kostnad", 0.0)
+
         return OppgaveResponse(**result)
-    
+
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Kunne ikke løse oppgaven: {e}")
 
 
 @app.get("/")
 async def root():
-    """Returner frontend (index.html)"""
+    """Returner frontend (index.html)."""
     frontend_path = os.path.join(os.path.dirname(__file__), "..", "frontend", "index.html")
     if os.path.exists(frontend_path):
         return FileResponse(frontend_path)
-    else:
-        return {"error": "Frontend not found"}
+    return {"error": "Frontend not found"}
 
 
 # Monter statiske filer (CSS, JS, etc.)
@@ -84,7 +88,7 @@ if os.path.isdir(frontend_dir):
 
 @app.get("/health")
 async def health():
-    """Health check"""
+    """Health check."""
     return {"status": "ok"}
 
 
