@@ -1,19 +1,16 @@
-"""MatteHjelpen – FastAPI-backend.
+"""FastAPI-kobling for MatteHjelpen."""
 
-SKJELETT: Bruk SYSTEMBESKRIVELSE.md som prompt og la en språkmodell hjelpe dere
-å fylle ut. Kravene:
+from pathlib import Path
 
-- POST /solve tar {"oppgave": "..."} og returnerer JSON med:
-  svar, steg (liste), formler_brukt, validert (bool), tokens_brukt, estimert_kostnad
-- GET / serverer frontend/index.html
-- God feilhåndtering: vis feil ærlig, ikke skjul dem.
-"""
-
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
+from . import llm_client, validator
+
 app = FastAPI(title="MatteHjelpen")
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
 class Oppgave(BaseModel):
@@ -22,19 +19,16 @@ class Oppgave(BaseModel):
 
 @app.get("/")
 async def index():
-    return FileResponse("frontend/index.html")
+    return FileResponse(Path(__file__).resolve().parent.parent / "frontend" / "index.html")
 
 
 @app.post("/solve")
 async def solve(oppgave: Oppgave):
-    # TODO: Kall llm_client.solve_task(oppgave.oppgave)
-    # TODO: Valider svaret med validator.validate(...)
-    # TODO: Returner full respons iht. SYSTEMBESKRIVELSE.md
-    return {
-        "svar": "Ikke implementert ennå – se SYSTEMBESKRIVELSE.md",
-        "steg": [],
-        "formler_brukt": [],
-        "validert": False,
-        "tokens_brukt": 0,
-        "estimert_kostnad": 0.0,
-    }
+    if not oppgave.oppgave.strip():
+        return {"svar": "Oppgaven kan ikke være tom.", "steg": [], "formler_brukt": [], "validert": False, "tokens_brukt": 0, "estimert_kostnad": 0.0, "feil": "Tom oppgave."}
+    try:
+        result = llm_client.solve_task(oppgave.oppgave)
+        checked = validator.validate(oppgave.oppgave, result.get("svar", ""))
+        return {**result, **checked}
+    except Exception as exc:
+        return {"svar": "Løsningen kunne ikke fullføres.", "steg": [f"Ærlig feilmelding: {exc}"], "formler_brukt": [], "validert": False, "tokens_brukt": 0, "estimert_kostnad": 0.0, "feil": str(exc)}

@@ -2,60 +2,76 @@
 <html lang="nb">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>MatteHjelpen</title>
-  <!-- MathJax for LaTeX-rendering -->
   <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 2rem auto; padding: 0 1rem; }
-    textarea { width: 100%; height: 5rem; font-size: 1rem; }
-    button { font-size: 1rem; padding: 0.5rem 1.5rem; margin-top: 0.5rem; cursor: pointer; }
-    .validert-ok { color: green; font-weight: bold; }
-    .validert-feil { color: red; font-weight: bold; }
-    .kostnad { color: #666; font-size: 0.9rem; margin-top: 1rem; }
-    li { margin-bottom: 0.5rem; }
+    :root { --ink: #17231d; --muted: #617168; --paper: #f4f0e8; --card: #fffdf8; --accent: #d65a3a; --line: #d8d2c5; --ok: #24734b; --bad: #a9382b; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: radial-gradient(circle at 10% 0%, #e9d9bf, transparent 32rem), var(--paper); font-family: Georgia, 'Times New Roman', serif; }
+    main { width: min(960px, calc(100% - 2rem)); margin: 3rem auto; }
+    header { display: flex; align-items: end; justify-content: space-between; gap: 1rem; border-bottom: 2px solid var(--ink); padding-bottom: 1.25rem; }
+    h1, h2, h3 { margin: 0; font-weight: 700; }
+    h1 { font-size: clamp(2.2rem, 7vw, 4.8rem); line-height: .9; letter-spacing: 0; }
+    .tag { color: var(--accent); font: 700 .75rem/1.2 system-ui, sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+    .composer, .result { background: var(--card); border: 1px solid var(--line); box-shadow: 8px 8px 0 #d7cdbb; }
+    .composer { margin-top: 2rem; padding: clamp(1.25rem, 4vw, 2rem); }
+    label { display: block; margin-bottom: .65rem; font: 700 .85rem system-ui, sans-serif; }
+    textarea { width: 100%; min-height: 8rem; resize: vertical; border: 2px solid var(--ink); background: #fff; padding: 1rem; color: var(--ink); font: 1.15rem/1.5 Georgia, serif; }
+    textarea:focus { outline: 3px solid #e8a98c; outline-offset: 2px; }
+    button { margin-top: 1rem; border: 0; background: var(--accent); color: #fff; padding: .85rem 1.4rem; cursor: pointer; font: 700 .9rem system-ui, sans-serif; }
+    button:disabled { opacity: .6; cursor: wait; }
+    .hint, .meta { color: var(--muted); font: .88rem/1.5 system-ui, sans-serif; }
+    .result { display: none; margin-top: 3rem; padding: clamp(1.25rem, 4vw, 2.5rem); }
+    .result h2 { font-size: 2rem; margin-bottom: 1rem; }
+    .answer { border-left: 4px solid var(--accent); padding: 1rem 1.25rem; background: #fff; white-space: pre-wrap; line-height: 1.6; }
+    section { margin-top: 2rem; }
+    ol, ul { padding-left: 1.4rem; }
+    li { margin: .75rem 0; line-height: 1.55; }
+    .validation { padding: 1rem; border: 1px solid currentColor; font: 700 .95rem/1.5 system-ui, sans-serif; }
+    .validert-ok { color: var(--ok); background: #edf7ef; }
+    .validert-feil { color: var(--bad); background: #fff0ed; }
+    .error { color: var(--bad); font: .9rem system-ui, sans-serif; }
+    @media (max-width: 600px) { main { margin: 1.5rem auto; } header { display: block; } .tag { display: block; margin-bottom: 1rem; } }
   </style>
 </head>
 <body>
-  <h1>MatteHjelpen 🧮</h1>
-  <p>Skriv inn en matteoppgave (f.eks. «Løs y'' + 4y = 0» eller «Deriver x²·sin(x)»):</p>
-  <textarea id="oppgave" placeholder="Skriv oppgaven her..."></textarea>
-  <br>
-  <button onclick="los()">Løs</button>
-
-  <div id="resultat" style="display:none">
-    <h2>Svar</h2>
-    <div id="svar"></div>
-    <h3>Stegvis løsning</h3>
-    <ol id="steg"></ol>
-    <h3>Formler brukt</h3>
-    <ul id="formler"></ul>
-    <p id="validering"></p>
-    <p class="kostnad" id="kostnad"></p>
-  </div>
-
+  <main>
+    <header><div><div class="tag">Etterprøvbar matematikk</div><h1>Matte-<br>hjelpen</h1></div><p class="hint">Modellen forklarer.<br>SymPy regner.</p></header>
+    <form class="composer" id="skjema">
+      <label for="oppgave">Oppgave</label>
+      <textarea id="oppgave" placeholder="Deriver x**2*sin(x) eller løs y(x).diff(x) + 4*y(x)" required></textarea>
+      <button id="los-knapp" type="submit">Løs oppgaven</button>
+    </form>
+    <div class="result" id="resultat" aria-live="polite">
+      <h2>Svar</h2><div class="answer" id="svar"></div>
+      <section><h3>Stegvis løsning</h3><ol id="steg"></ol></section>
+      <section><h3>Formler brukt</h3><ul id="formler"></ul></section>
+      <section><h3>Kontroll</h3><div id="validering" class="validation"></div><p class="hint" id="valideringsdetaljer"></p></section>
+      <section><h3>Forbruk</h3><p class="meta" id="kostnad"></p><ul id="verktoy"></ul></section>
+      <p class="error" id="feil"></p>
+    </div>
+  </main>
   <script>
-    async function los() {
-      const oppgave = document.getElementById('oppgave').value;
-      const res = await fetch('/solve', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oppgave })
-      });
-      const data = await res.json();
-
-      document.getElementById('resultat').style.display = 'block';
-      document.getElementById('svar').innerHTML = data.svar;
-      document.getElementById('steg').innerHTML =
-        data.steg.map(s => `<li>${s}</li>`).join('');
-      document.getElementById('formler').innerHTML =
-        data.formler_brukt.map(f => `<li>${f}</li>`).join('');
-      const v = document.getElementById('validering');
-      v.textContent = data.validert ? '✅ Svaret er numerisk validert' : '❌ Svaret kunne IKKE valideres – stol ikke blindt på det!';
-      v.className = data.validert ? 'validert-ok' : 'validert-feil';
-      document.getElementById('kostnad').textContent =
-        `Tokens brukt: ${data.tokens_brukt} · Estimert kostnad: $${data.estimert_kostnad}`;
-      MathJax.typeset();
+    const $ = id => document.getElementById(id);
+    function listInto(element, values, render) { element.replaceChildren(...values.map(render)); }
+    function textItem(text) { const item = document.createElement('li'); item.textContent = text; return item; }
+    async function los(event) {
+      event.preventDefault(); const button = $('los-knapp'); button.disabled = true; button.textContent = 'Løser ...';
+      try {
+        const response = await fetch('/solve', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({oppgave: $('oppgave').value}) });
+        const data = await response.json(); $('resultat').style.display = 'block'; $('svar').textContent = data.svar || '';
+        listInto($('steg'), data.steg || [], textItem);
+        listInto($('formler'), data.formler_brukt || [], formula => textItem(`${formula.id}: ${formula.navn} (${formula.referanse})${formula.steg ? ` — ${formula.steg}` : ''}`));
+        const validation = $('validering'); validation.textContent = data.validert ? '✓ Numerisk validert' : '! Ikke numerisk validert'; validation.className = `validation ${data.validert ? 'validert-ok' : 'validert-feil'}`;
+        $('valideringsdetaljer').textContent = data.valideringsdetaljer || data.detaljer || 'Valideringsdetaljer er ikke tilgjengelige.';
+        $('kostnad').textContent = `Tokens: ${data.tokens_brukt ?? 'ukjent'} · Estimert kostnad: $${data.estimert_kostnad ?? 'ukjent'}`;
+        listInto($('verktoy'), (data.verktoy_brukt || []).map(tool => `${tool.navn}(${tool.argumenter})`), textItem); $('feil').textContent = data.feil || '';
+        if (window.MathJax) await MathJax.typesetPromise([$ ('resultat')]);
+      } catch (error) { $('resultat').style.display = 'block'; $('feil').textContent = `Nettverksfeil: ${error.message}`; }
+      finally { button.disabled = false; button.textContent = 'Løs oppgaven'; }
     }
+    $('skjema').addEventListener('submit', los);
   </script>
 </body>
 </html>
