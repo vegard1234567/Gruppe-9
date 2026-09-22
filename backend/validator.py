@@ -10,6 +10,17 @@ TRANSFORMATIONS = standard_transformations + (implicit_multiplication_applicatio
 POINTS = (0.37, 1.11, 2.03)
 
 
+def _pretty_number(value, significant_digits=6):
+  """Viser tall kompakt uten å endre presisjonen i selve kontrollen."""
+  value = sp.N(value)
+  if value.is_real and value.is_integer:
+    return str(int(value))
+  number = float(value)
+  if number == 0:
+    return "0"
+  return f"{number:.{significant_digits}g}"
+
+
 def _parse(value: str, x, y):
   return parse_expr(value.replace("^", "**"), local_dict={"x": x, "y": y, "exp": sp.exp}, transformations=TRANSFORMATIONS)
 
@@ -23,8 +34,21 @@ def validate(problem: str, losning: str) -> dict:
   try:
     x = sp.Symbol("x")
     y = sp.Function("y")
+    # Enkle numeriske uttrykk kan valideres direkte uten en ODE-modell.
+    if not re.search(r"(?:y\(x\)|y).*diff|y['′]|Eq\(", problem):
+      if re.fullmatch(r"[0-9+\-*/().\s^]+", problem.strip()):
+        expected = sp.N(sp.sympify(problem.replace("^", "**")))
+        answer_match = re.search(r"(?:=|er|blir|svar:?)\s*([-+]?\d+(?:\.\d+)?)\s*$", losning, re.IGNORECASE)
+        answer_text = answer_match.group(1) if answer_match else losning.strip()
+        actual = sp.N(sp.sympify(answer_text.replace("^", "**")))
+        difference = abs(float(expected - actual))
+        if difference <= 1e-7:
+          return {"validert": True, "detaljer": f"SymPy beregnet {_pretty_number(expected)} og sammenlignet med svaret {_pretty_number(actual)}; avviket var {_pretty_number(difference)}."}
+        return {"validert": False, "detaljer": f"Validering feilet: SymPy beregnet {_pretty_number(expected)}, men svaret var {_pretty_number(actual)}."}
+      return {"validert": False, "detaljer": "Ikke numerisk validert: oppgaven er ikke en støttet, maskinlesbar beregningstype."}
+
     solution_match = re.search(r"(?:y\(x\)|y)\s*=\s*(.+)", losning, re.IGNORECASE)
-    if not solution_match or not re.search(r"(?:y\(x\)|y).*diff|y['′]|Eq\(", problem):
+    if not solution_match:
       return {"validert": False, "detaljer": "Ikke numerisk validert: oppgaven eller svaret er ikke en støttet, maskinlesbar differensialligning."}
 
     solution = _parse(solution_match.group(1).strip(), x, y)
